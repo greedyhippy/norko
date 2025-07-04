@@ -1,0 +1,27 @@
+{
+  "name": "heatshop-crystallize-scraper",
+  "version": "1.0.0",
+  "description": "Scrapes HeatShop products for Crystallize headless commerce demo",
+  "main": "scrape-heatshop.js",
+  "scripts": {
+    "scrape": "node scrape-heatshop.js",
+    "test": "node test-scraper.js",
+    "start": "npm run scrape"
+  },
+  "dependencies": {
+    "axios": "^1.10.0",
+    "cheerio": "^1.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "keywords": [
+    "scraping",
+    "crystallize",
+    "headless-commerce",
+    "graphql",
+    "infrared-heaters"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
