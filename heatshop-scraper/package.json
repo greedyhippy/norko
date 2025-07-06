@@ -1,16 +1,23 @@
 {
   "name": "heatshop-crystallize-scraper",
-  "version": "1.0.0",
-  "description": "Scrapes HeatShop products for Crystallize headless commerce demo",
-  "main": "scrape-heatshop.js",
+  "version": "3.0.0",
+  "description": "Enhanced scraper with Crystallize CMS and Supabase image integration for infrared heater e-commerce demo",
+  "main": "enhanced-scraper.js",
   "scripts": {
     "scrape": "node scrape-heatshop.js",
+    "scrape-enhanced": "node enhanced-scraper.js",
     "test": "node test-scraper.js",
-    "start": "npm run scrape"
+    "test-images": "node test-image-upload.js",
+    "start": "npm run scrape",
+    "setup": "cp .env.example .env && echo 'Please configure your .env file with API credentials'"
   },
   "dependencies": {
+    "@crystallize/js-api-client": "^4.3.0",
+    "@supabase/supabase-js": "^2.50.3",
     "axios": "^1.10.0",
-    "cheerio": "^1.1.0"
+    "cheerio": "^1.1.0",
+    "dotenv": "^17.0.1",
+    "form-data": "^4.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"

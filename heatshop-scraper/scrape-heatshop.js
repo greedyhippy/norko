@@ -9,10 +9,12 @@
  * - Comprehensive product data extraction
  * - TypeScript-like data validation
  * - Crystallize-formatted output
+ * - Enhanced image upload to Crystallize CMS and Supabase
+ * - Cost-effective image hosting strategy
  * - Error handling and logging
  * 
  * @author Norko Development Team
- * @version 2.0.0
+ * @version 3.0.0
  * @since 2025-07-06
  */
 
@@ -25,6 +27,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const https = require('https');
 const { URL } = require('url');
+const { ImageUploadService } = require('./image-upload-service');
 
 // Enhanced configuration with new extraction capabilities
 const CONFIG = {
@@ -35,12 +38,15 @@ const CONFIG = {
   userAgent: 'Educational-Portfolio-Bot/1.0',
   // Enhanced image handling options
   enableImageDownload: true, // Download product images locally
-  imageDirectory: './images', // Local directory for downloaded images
+  enableCloudUpload: true, // Upload to Crystallize CMS and Supabase
+  imageDirectory: './images', // Local directory for downloaded images (backup)
   imageFormats: ['jpg', 'jpeg', 'png', 'webp'], // Supported formats
   minImageSize: 10000, // Minimum file size in bytes (filter out tiny images)
   maxImageSize: 5000000, // Maximum file size in bytes (5MB)
   imageQuality: 'high', // Image quality preference
   generateThumbnails: true, // Generate thumbnail versions
+  preferCloudUrls: true, // Use Crystallize CDN URLs in output
+  fallbackToOriginal: true, // Use original URLs if upload fails
   validateData: true, // Validate extracted data before saving
   retryFailedRequests: true, // Retry failed requests
   maxRetries: 3,
@@ -122,8 +128,12 @@ class HeatShopScraper {
       successfulRequests: 0,
       failedRequests: 0,
       productsExtracted: 0,
-      categoriesProcessed: 0
+      categoriesProcessed: 0,
+      imagesUploaded: 0,
+      imageUploadsFailed: 0
     };
+    // Initialize image upload service
+    this.imageService = new ImageUploadService();
   }
 
   /**
@@ -302,9 +312,9 @@ class HeatShopScraper {
       // Generate product ID for image processing
       const productId = this.generateId(name);
       
-      // Extract and process images (async operation)
+      // Extract and process images with cloud upload
       console.log(`📸 Processing images for ${name}...`);
-      const images = await this.extractImages($, productId, name);
+      const images = await this.extractAndUploadImages($, productId, name);
 
       // Validate extracted data
       if (CONFIG.validateData && !this.validateProductData(name, price, specifications)) {
@@ -1560,3 +1570,202 @@ async function processProductImages(imageUrls, productId, productName) {
   console.log(`📸 Processed ${processedImages.length} images for ${productName}`);
   return processedImages;
 }
+
+/**
+   * Extract and upload product images with cloud storage integration
+   * @param {Object} $ - Cheerio object
+   * @param {string} productId - Product identifier
+   * @param {string} productName - Product name
+   * @returns {Promise<Array>} Array of processed image objects with cloud URLs
+   */
+  async extractAndUploadImages($, productId, productName) {
+    // First extract image URLs using existing logic
+    const imageUrls = this.extractImageUrls($, productName);
+    
+    if (imageUrls.length === 0) {
+      console.log(`⚠️  No images found for ${productName}`);
+      return [];
+    }
+    
+    console.log(`🔍 Found ${imageUrls.length} potential images for ${productName}`);
+    
+    // Filter valid product images
+    const validImageUrls = imageUrls.filter(url => this.isValidProductImage(url, productName));
+    console.log(`✅ ${validImageUrls.length} valid product images identified`);
+    
+    if (!CONFIG.enableCloudUpload) {
+      // Return original URLs if cloud upload disabled
+      return validImageUrls.map((url, index) => ({
+        url: url,
+        altText: `${productName} - Image ${index + 1}`,
+        isLocal: false,
+        originalUrl: url
+      }));
+    }
+    
+    // Upload images to Crystallize and Supabase
+    try {
+      const uploadResults = await this.imageService.uploadProductImages(
+        validImageUrls.slice(0, 5), // Limit to 5 images per product
+        productId,
+        productName
+      );
+      
+      // Process upload results for Crystallize format
+      const crystallizeImages = uploadResults.map((result, index) => {
+        if (result.success) {
+          this.statistics.imagesUploaded++;
+          
+          // Prefer Crystallize CDN URL, fallback to Supabase, then original
+          const imageUrl = result.primaryUrl || result.backupUrl || result.originalUrl;
+          
+          return {
+            url: imageUrl,
+            crystallizeUrl: result.primaryUrl,
+            supabaseUrl: result.backupUrl,
+            altText: result.altText,
+            originalUrl: result.originalUrl,
+            crystallizeId: result.crystallizeId,
+            supabasePath: result.supabasePath,
+            uploadedAt: new Date().toISOString(),
+            isCloudHosted: !!(result.primaryUrl || result.backupUrl)
+          };
+        } else {
+          this.statistics.imageUploadsFailed++;
+          console.warn(`⚠️  Image upload failed for ${productName} image ${index + 1}: ${result.error}`);
+          
+          // Fallback to original URL
+          return {
+            url: CONFIG.fallbackToOriginal ? result.originalUrl : null,
+            altText: result.altText,
+            originalUrl: result.originalUrl,
+            isCloudHosted: false,
+            uploadError: result.error
+          };
+        }
+      }).filter(img => img.url); // Remove failed uploads without fallback URLs
+      
+      console.log(`📸 Successfully processed ${crystallizeImages.length} images for ${productName}`);
+      return crystallizeImages;
+      
+    } catch (error) {
+      console.error(`❌ Failed to upload images for ${productName}:`, error.message);
+      this.statistics.imageUploadsFailed += validImageUrls.length;
+      
+      // Fallback to original URLs
+      if (CONFIG.fallbackToOriginal) {
+        return validImageUrls.map((url, index) => ({
+          url: url,
+          altText: `${productName} - Image ${index + 1}`,
+          originalUrl: url,
+          isCloudHosted: false,
+          uploadError: error.message
+        }));
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Extract image URLs from page (extracted from existing method)
+   * @param {Object} $ - Cheerio object
+   * @param {string} productName - Product name for validation
+   * @returns {Array} Array of image URLs
+   */
+  extractImageUrls($, productName) {
+    const imageUrls = [];
+    
+    // Extract all potential product images from the page
+    $('img').each((i, element) => {
+      const src = $(element).attr('src');
+      const dataSrc = $(element).attr('data-src'); // Lazy loading
+      const srcset = $(element).attr('srcset');
+      
+      // Collect all possible image sources
+      const sources = [src, dataSrc];
+      
+      // Parse srcset for high-quality images
+      if (srcset) {
+        const srcsetUrls = srcset.split(',').map(s => s.trim().split(' ')[0]);
+        sources.push(...srcsetUrls);
+      }
+      
+      sources.forEach(source => {
+        if (source && source.trim()) {
+          const fullUrl = source.startsWith('http') ? source : CONFIG.baseUrl + source;
+          if (!imageUrls.includes(fullUrl)) {
+            imageUrls.push(fullUrl);
+          }
+        }
+      });
+    });
+
+    // Look for high-quality images in specific containers
+    const highQualitySelectors = [
+      '.product-image img',
+      '.gallery img',
+      '.product-gallery img',
+      '.main-image img',
+      '.hero-image img',
+      '[class*="product"] img[src*="large"]',
+      '[class*="product"] img[src*="full"]'
+    ];
+    
+    highQualitySelectors.forEach(selector => {
+      $(selector).each((i, element) => {
+        const src = $(element).attr('src') || $(element).attr('data-src');
+        if (src) {
+          const fullUrl = src.startsWith('http') ? src : CONFIG.baseUrl + src;
+          if (!imageUrls.includes(fullUrl)) {
+            imageUrls.unshift(fullUrl); // Prioritize these images
+          }
+        }
+      });
+    });
+    
+    return imageUrls;
+  }
+
+  /**
+   * Check if URL points to a valid product image
+   * @param {string} imageUrl - Image URL to validate
+   * @param {string} productName - Product name for context
+   * @returns {boolean} True if valid product image
+   */
+  isValidProductImage(imageUrl, productName) {
+    // Enhanced validation logic for product images
+    const urlLower = imageUrl.toLowerCase();
+    const productNameLower = productName.toLowerCase();
+    
+    // Include criteria - must contain product-related keywords
+    const includeKeywords = [
+      'product', 'heater', 'panel', 'infrared', 'heating',
+      // Extract key words from product name
+      ...productNameLower.split(/\s+/).filter(word => word.length > 3)
+    ];
+    
+    // Exclude criteria - avoid logos, icons, etc.
+    const excludeKeywords = [
+      'logo', 'icon', 'banner', 'header', 'footer', 'menu',
+      'social', 'facebook', 'twitter', 'instagram', 'youtube',
+      'payment', 'badge', 'award', 'certification', 'delivery',
+      'shipping', 'guarantee', 'warranty-badge', 'visa', 'mastercard',
+      'paypal', 'ssl', 'secure', 'trustpilot', 'review'
+    ];
+    
+    // Check for exclusion keywords first
+    const hasExcludedContent = excludeKeywords.some(keyword => urlLower.includes(keyword));
+    if (hasExcludedContent) {
+      return false;
+    }
+    
+    // Check for inclusion keywords
+    const hasIncludedContent = includeKeywords.some(keyword => urlLower.includes(keyword));
+    
+    // Additional checks for image quality indicators
+    const qualityIndicators = ['large', 'full', 'hires', 'detail', 'zoom'];
+    const hasQualityIndicator = qualityIndicators.some(indicator => urlLower.includes(indicator));
+    
+    return hasIncludedContent || hasQualityIndicator;
+  }
