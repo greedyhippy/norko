@@ -9,6 +9,9 @@
     "test": "node test-scraper.js",
     "test-images": "node test-image-upload.js",
     "test-graphql": "node test-supabase-graphql.js",
+    "test-pipeline": "node test-complete-pipeline.js",
+    "test-storage": "node test-storage-bucket.js",
+    "debug-rls": "node debug-rls.js",
     "start": "npm run scrape",
     "setup": "cp .env.example .env && echo 'Please configure your .env file with API credentials'"
   },
