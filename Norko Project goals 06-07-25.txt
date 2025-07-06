@@ -1,0 +1,11 @@
+The project Goal is to create a functional e-commerce demo store. 
+
+The tech stack is expected to be Remix, Typescript, Crystallize CMS, Railway and any others deemed necessary.
+
+The objective is to scrape data from a third party wesbsite for content. Bootstrap a template from Crystallize. Store the correct content with Crystallize. Use Railway to host a GraphQL API for other dynamic data. 
+
+Once the backend railway API and a working basic frontend is working with a Crystallize CMS we want to make the project look top tier using frontend builders e.g. Astro, or MidJourney.
+
+We have already covered some of this so far. I would like us to re-cap and create a plan. Also I would like you to check claude.md in the root folder as I have added some further context directives. 
+
+We are also not switching to a context engineering approach. So before we progress. If you have suggestions on what we should do to enable that approach please make them
