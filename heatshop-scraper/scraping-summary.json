@@ -1,16 +1,30 @@
 {
-  "scrapedAt": "2025-07-06T16:06:39.956Z",
-  "totalProducts": 5,
+  "scrapedAt": "2025-07-06T18:53:56.433Z",
+  "totalProducts": 36,
   "source": "heatershop.co.uk",
   "scraper": {
     "version": "2.0.0",
     "configuration": {
       "baseUrl": "https://www.heatershop.co.uk",
-      "delay": 1000,
-      "maxProducts": 5,
+      "delay": 2000,
+      "maxProducts": 100,
       "outputFile": "crystallize-products.json",
       "userAgent": "Educational-Portfolio-Bot/1.0",
-      "enableImageDownload": false,
+      "enableImageDownload": true,
+      "enableCloudUpload": true,
+      "imageDirectory": "./images",
+      "imageFormats": [
+        "jpg",
+        "jpeg",
+        "png",
+        "webp"
+      ],
+      "minImageSize": 10000,
+      "maxImageSize": 5000000,
+      "imageQuality": "high",
+      "generateThumbnails": true,
+      "preferCloudUrls": true,
+      "fallbackToOriginal": true,
       "validateData": true,
       "retryFailedRequests": true,
       "maxRetries": 3,
@@ -19,39 +33,54 @@
       "categorizeByPower": true
     },
     "statistics": {
-      "totalRequests": 6,
-      "successfulRequests": 6,
-      "failedRequests": 0,
-      "productsExtracted": 5,
-      "categoriesProcessed": 1
+      "totalRequests": 48,
+      "successfulRequests": 40,
+      "failedRequests": 8,
+      "productsExtracted": 36,
+      "categoriesProcessed": 5,
+      "imagesUploaded": 31,
+      "imageUploadsFailed": 130
     },
-    "errors": [],
-    "processingTime": 7932
+    "errors": [
+      {
+        "url": "https://www.british-gypsum.com/specification/our-products/acoustic-ceiling-systems",
+        "error": "Request failed with status code 403",
+        "timestamp": "2025-07-06T18:51:19.131Z",
+        "retryCount": 3
+      },
+      {
+        "url": "https://www.heatershop.co.uk/infrared-heaters/outdoor-patio-heaters",
+        "error": "Request failed with status code 404",
+        "timestamp": "2025-07-06T18:53:56.432Z",
+        "retryCount": 3
+      }
+    ],
+    "processingTime": 433862
   },
   "categories": [
     {
       "name": "Panel Heaters",
       "description": "Wall-mounted infrared panel heaters perfect for residential and office spaces",
       "powerRange": "250W - 1200W",
-      "productsExtracted": 5
+      "productsExtracted": 21
     },
     {
       "name": "Ceiling Heaters",
       "description": "Ceiling-mounted infrared heaters ideal for commercial environments",
       "powerRange": "1000W - 3000W",
-      "productsExtracted": 0
+      "productsExtracted": 2
     },
     {
       "name": "Industrial Heaters",
       "description": "Heavy-duty infrared heaters for workshops and industrial spaces",
       "powerRange": "2000W - 6000W",
-      "productsExtracted": 0
+      "productsExtracted": 3
     },
     {
       "name": "Far Infrared Heaters",
       "description": "Health-focused far infrared heating technology",
       "powerRange": "300W - 800W",
-      "productsExtracted": 0
+      "productsExtracted": 10
     },
     {
       "name": "Patio Heaters",
@@ -61,13 +90,13 @@
     }
   ],
   "dataQuality": {
-    "productsWithPricing": 5,
-    "productsWithSpecs": 5,
-    "productsWithImages": 5,
-    "averagePrice": 469,
+    "productsWithPricing": 36,
+    "productsWithSpecs": 35,
+    "productsWithImages": 34,
+    "averagePrice": 377,
     "powerRange": {
-      "min": 4,
-      "max": 4
+      "min": 1,
+      "max": 1950
     }
   }
 }
