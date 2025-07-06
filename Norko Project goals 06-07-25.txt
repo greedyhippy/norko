@@ -4,7 +4,7 @@ The tech stack is expected to be Remix, Typescript, Crystallize CMS, Railway and
 
 The objective is to scrape data from a third party wesbsite for content. Bootstrap a template from Crystallize. Store the correct content with Crystallize. Use Railway to host a GraphQL API for other dynamic data. 
 
-Once the backend railway API and a working basic frontend is working with a Crystallize CMS we want to make the project look top tier using frontend builders e.g. Astro, or MidJourney.
+Once the backend railway API and a working basic frontend is working with a Crystallize CMS we want to make the project look top tier using frontend builders e.g. Astro, or MidJourney to create a theme for the UI/UX.
 
 We have already covered some of this so far. I would like us to re-cap and create a plan. Also I would like you to check claude.md in the root folder as I have added some further context directives. 
 

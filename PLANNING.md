@@ -9,9 +9,17 @@ Create a functional, top-tier e-commerce demo store for infrared heaters using m
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Remix Store   │────│   Railway API    │────│   Crystallize   │
 │ TypeScript/React│    │   GraphQL API    │    │   Headless CMS  │
-│ Frontend UI     │    │   Dynamic Data   │    │   Product Data  │
-│ localhost:3018  │    │   Authentication │    │   Content Mgmt  │
+│ Frontend UI     │    │   Authentication │    │   Product Data  │
+│ localhost:3018  │    │   Business Logic │    │   + Asset CDN   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+                                                        │
+                                                        ▼
+                                               ┌─────────────────┐
+                                               │   Supabase      │
+                                               │   Storage       │ 
+                                               │   (Free Tier)   │
+                                               │   Image Backup  │
+                                               └─────────────────┘
 ```
 
 ## 🛠️ **Tech Stack**
@@ -70,10 +78,12 @@ norko/
 - [x] Environment configuration and security
 - [x] GitHub repository setup
 
-### **Phase 2: Data Integration** 🚧 *IN PROGRESS*
-- [ ] Web scraping for infrared heater product data
+### **Phase 2: Data Integration** ✅ *COMPLETED*
+- [x] Web scraping for infrared heater product data
+- [x] Enhanced image capture and processing system
+- [x] Railway API enhancement with scraped data
+- [ ] Frontend integration with Railway data
 - [ ] Crystallize content population (products, categories)
-- [ ] Railway API product integration
 - [ ] Dynamic content loading and caching
 
 ### **Phase 3: Core E-Commerce Features** 🔄 *PLANNED*
@@ -150,6 +160,9 @@ Raw Product    Structured JSON    CMS Storage    User Interface
 - `CRYSTALLIZE_ACCESS_TOKEN_SECRET`
 - `RAILWAY_API_URL`
 - `RAILWAY_API_KEY`
+- `SUPABASE_URL` (optional - for image backup)
+- `SUPABASE_ANON_KEY` (optional)
+- `SUPABASE_SERVICE_KEY` (optional)
 
 ### **Security Measures**
 - Environment variable isolation
@@ -186,3 +199,34 @@ Raw Product    Structured JSON    CMS Storage    User Interface
 4. Update `TASK.md` with progress
 5. Commit and push to GitHub
 6. Merge to main when complete
+
+## 🖼️ **Image Strategy & Asset Management**
+
+### **Image Capture & Processing Pipeline**
+```
+Web Scraping → Image Filtering → Crystallize Upload → Asset CDN → Frontend Display
+     ↓              ↓                    ↓           ↓           ↓
+  Raw URLs     Product Images       CMS Storage   Built-in CDN  User Interface
+   Extract      Validation         + Supabase     Optimization   Rendering
+                                   (Backup)
+```
+
+### **Image Processing Features**
+- **Smart Filtering**: Automatically excludes logos, icons, banners, social media images
+- **Quality Detection**: Prioritizes high-resolution product images (>200x200px)
+- **Crystallize Primary**: Direct upload to Crystallize CMS with built-in CDN
+- **Supabase Backup**: Optional backup storage for redundancy (1GB free)
+- **Cost Optimization**: Zero additional costs using existing Crystallize plan
+- **Performance**: Built-in CDN optimization via Crystallize's asset delivery
+
+### **Image Validation Criteria**
+- **Include**: URLs containing "product", "heater", "panel", "infrared", product name keywords
+- **Exclude**: Logos, icons, banners, social media, payment badges, awards, delivery graphics
+- **Format Support**: JPG, PNG, WebP with Crystallize's automatic optimization
+- **Quality Filters**: Minimum dimensions (200x200px), reasonable file sizes
+
+### **Deployment Strategy**
+- **Development**: Crystallize development tenant with test images
+- **Production**: Crystallize production CDN (included in CMS plan)
+- **Backup**: Optional Supabase storage for image redundancy (1GB free tier)
+- **Performance**: Native CDN optimization via Crystallize's global infrastructure

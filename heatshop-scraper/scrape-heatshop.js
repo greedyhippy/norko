@@ -23,6 +23,8 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs').promises;
 const path = require('path');
+const https = require('https');
+const { URL } = require('url');
 
 // Enhanced configuration with new extraction capabilities
 const CONFIG = {
@@ -31,8 +33,14 @@ const CONFIG = {
   maxProducts: 100,
   outputFile: 'crystallize-products.json',
   userAgent: 'Educational-Portfolio-Bot/1.0',
-  // New enhanced options
-  enableImageDownload: false, // Set to true to download images locally
+  // Enhanced image handling options
+  enableImageDownload: true, // Download product images locally
+  imageDirectory: './images', // Local directory for downloaded images
+  imageFormats: ['jpg', 'jpeg', 'png', 'webp'], // Supported formats
+  minImageSize: 10000, // Minimum file size in bytes (filter out tiny images)
+  maxImageSize: 5000000, // Maximum file size in bytes (5MB)
+  imageQuality: 'high', // Image quality preference
+  generateThumbnails: true, // Generate thumbnail versions
   validateData: true, // Validate extracted data before saving
   retryFailedRequests: true, // Retry failed requests
   maxRetries: 3,
@@ -287,10 +295,16 @@ class HeatShopScraper {
       const description = this.extractDescription($);
       const specifications = this.extractEnhancedSpecifications($);
       const features = this.extractFeatures($);
-      const images = this.extractImages($);
       const technicalSpecs = this.extractTechnicalSpecifications($);
       const warranty = this.extractWarrantyInfo($);
       const availability = this.extractAvailability($);
+
+      // Generate product ID for image processing
+      const productId = this.generateId(name);
+      
+      // Extract and process images (async operation)
+      console.log(`📸 Processing images for ${name}...`);
+      const images = await this.extractImages($, productId, name);
 
       // Validate extracted data
       if (CONFIG.validateData && !this.validateProductData(name, price, specifications)) {
@@ -518,23 +532,68 @@ class HeatShopScraper {
    * @param {Object} $ - Cheerio object
    * @returns {Array<Object>} Array of image objects
    */
-  extractImages($) {
-    const images = [];
+  /**
+   * Extract and process product images with enhanced filtering
+   * @param {Object} $ - Cheerio object
+   * @param {string} productId - Product identifier
+   * @param {string} productName - Product name
+   * @returns {Promise<Array>} Array of processed image objects
+   */
+  async extractImages($, productId, productName) {
+    const imageUrls = [];
     
+    // Extract all potential product images from the page
     $('img').each((i, element) => {
       const src = $(element).attr('src');
-      const alt = $(element).attr('alt') || 'Product image';
+      const dataSrc = $(element).attr('data-src'); // Lazy loading
+      const srcset = $(element).attr('srcset');
       
-      if (src && (src.includes('product') || src.includes('heater') || i < 3)) {
-        const fullUrl = src.startsWith('http') ? src : CONFIG.baseUrl + src;
-        images.push({
-          url: fullUrl,
-          altText: alt
-        });
+      // Collect all possible image sources
+      const sources = [src, dataSrc];
+      
+      // Parse srcset for high-quality images
+      if (srcset) {
+        const srcsetUrls = srcset.split(',').map(s => s.trim().split(' ')[0]);
+        sources.push(...srcsetUrls);
       }
+      
+      sources.forEach(source => {
+        if (source && source.trim()) {
+          const fullUrl = source.startsWith('http') ? source : CONFIG.baseUrl + source;
+          if (!imageUrls.includes(fullUrl)) {
+            imageUrls.push(fullUrl);
+          }
+        }
+      });
     });
 
-    return images.slice(0, 3); // Limit to 3 images
+    // Look for high-quality images in specific containers
+    const highQualitySelectors = [
+      '.product-image img',
+      '.gallery img',
+      '.product-gallery img',
+      '.main-image img',
+      '.hero-image img',
+      '[class*="product"] img[src*="large"]',
+      '[class*="product"] img[src*="full"]'
+    ];
+    
+    highQualitySelectors.forEach(selector => {
+      $(selector).each((i, element) => {
+        const src = $(element).attr('src') || $(element).attr('data-src');
+        if (src) {
+          const fullUrl = src.startsWith('http') ? src : CONFIG.baseUrl + src;
+          if (!imageUrls.includes(fullUrl)) {
+            imageUrls.unshift(fullUrl); // Prioritize these images
+          }
+        }
+      });
+    });
+
+    console.log(`🔍 Found ${imageUrls.length} potential images for ${productName}`);
+    
+    // Process images with downloading and filtering
+    return await processProductImages(imageUrls, productId, productName);
   }
 
   /**
@@ -1259,4 +1318,245 @@ module.exports = { HeatShopScraper, CONFIG, CATEGORIES };
 // Run if called directly
 if (require.main === module) {
   main();
+}
+
+/**
+ * Enhanced Image Processing Functions
+ */
+
+/**
+ * Check if an image URL is likely a product image (not logo, icon, etc.)
+ * @param {string} imageUrl - The image URL to validate
+ * @param {string} productName - Product name for context
+ * @returns {boolean} - True if likely a product image
+ */
+function isValidProductImage(imageUrl, productName = '') {
+  if (!imageUrl || typeof imageUrl !== 'string') return false;
+  
+  const url = imageUrl.toLowerCase();
+  const productWords = productName.toLowerCase().split(/\s+/);
+  
+  // Exclude common non-product images
+  const excludePatterns = [
+    'logo', 'icon', 'banner', 'header', 'footer', 'nav',
+    'social', 'facebook', 'twitter', 'instagram', 'youtube',
+    'payment', 'paypal', 'visa', 'mastercard', 'amex',
+    'badge', 'award', 'certificate', 'guarantee',
+    'feefo', 'trustpilot', 'reviews', 'rating',
+    'delivery', 'shipping', 'truck',
+    'arrow', 'button', 'close', 'search',
+    'bg-', 'background', 'texture', 'pattern'
+  ];
+  
+  // Check if URL contains exclusion patterns
+  if (excludePatterns.some(pattern => url.includes(pattern))) {
+    return false;
+  }
+  
+  // Prefer images that contain product-related words
+  const productIndicators = [
+    'product', 'heater', 'panel', 'infrared', 'radiator',
+    'electric', 'heating', 'thermal', 'warm',
+    ...productWords.filter(word => word.length > 2)
+  ];
+  
+  const hasProductIndicator = productIndicators.some(indicator => 
+    url.includes(indicator)
+  );
+  
+  // Must be a supported image format
+  const validExtensions = CONFIG.imageFormats.map(fmt => `.${fmt}`);
+  const hasValidExtension = validExtensions.some(ext => url.includes(ext));
+  
+  // Check image dimensions in URL (prefer larger images)
+  const dimensionMatch = url.match(/(\d{3,4})x(\d{3,4})/);
+  if (dimensionMatch) {
+    const width = parseInt(dimensionMatch[1]);
+    const height = parseInt(dimensionMatch[2]);
+    if (width < 200 || height < 200) return false; // Too small
+  }
+  
+  return hasValidExtension && (hasProductIndicator || url.includes('product'));
+}
+
+/**
+ * Download an image from URL and save locally
+ * @param {string} imageUrl - The image URL to download
+ * @param {string} localPath - Local path to save the image
+ * @param {string} productId - Product ID for naming
+ * @returns {Promise<Object>} - Download result with metadata
+ */
+async function downloadImage(imageUrl, localPath, productId) {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    
+    // Create local filename
+    const urlObj = new URL(imageUrl);
+    const extension = path.extname(urlObj.pathname) || '.jpg';
+    const filename = `${productId}-${Date.now()}${extension}`;
+    const fullPath = path.join(CONFIG.imageDirectory, filename);
+    
+    // Download options
+    const options = {
+      headers: {
+        'User-Agent': CONFIG.userAgent,
+        'Accept': 'image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br'
+      },
+      timeout: 30000
+    };
+    
+    const file = require('fs').createWriteStream(fullPath);
+    
+    const request = https.get(imageUrl, options, (response) => {
+      if (response.statusCode !== 200) {
+        file.destroy();
+        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+        return;
+      }
+      
+      const contentLength = parseInt(response.headers['content-length'] || '0');
+      
+      // Check file size limits
+      if (contentLength > 0) {
+        if (contentLength < CONFIG.minImageSize) {
+          file.destroy();
+          reject(new Error(`Image too small: ${contentLength} bytes`));
+          return;
+        }
+        if (contentLength > CONFIG.maxImageSize) {
+          file.destroy();
+          reject(new Error(`Image too large: ${contentLength} bytes`));
+          return;
+        }
+      }
+      
+      let downloadedBytes = 0;
+      
+      response.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        if (downloadedBytes > CONFIG.maxImageSize) {
+          file.destroy();
+          reject(new Error(`Image exceeded size limit during download`));
+          return;
+        }
+      });
+      
+      response.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        const downloadTime = Date.now() - startTime;
+        
+        resolve({
+          success: true,
+          filename,
+          localPath: fullPath,
+          publicUrl: `/images/${filename}`,
+          originalUrl: imageUrl,
+          size: downloadedBytes,
+          downloadTime,
+          contentType: response.headers['content-type'] || 'image/jpeg'
+        });
+      });
+    });
+    
+    request.on('error', (err) => {
+      file.destroy();
+      reject(err);
+    });
+    
+    request.on('timeout', () => {
+      request.destroy();
+      file.destroy();
+      reject(new Error('Download timeout'));
+    });
+    
+    file.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Process and download product images
+ * @param {Array} imageUrls - Array of image URLs
+ * @param {string} productId - Product identifier
+ * @param {string} productName - Product name for validation
+ * @returns {Promise<Array>} - Array of processed image objects
+ */
+async function processProductImages(imageUrls, productId, productName) {
+  const processedImages = [];
+  
+  if (!CONFIG.enableImageDownload) {
+    // Return original URLs if download disabled
+    return imageUrls.map((url, index) => ({
+      url: url,
+      altText: `${productName} - Image ${index + 1}`,
+      isLocal: false,
+      original: true
+    }));
+  }
+  
+  // Ensure image directory exists
+  try {
+    await fs.mkdir(CONFIG.imageDirectory, { recursive: true });
+  } catch (error) {
+    console.warn(`⚠️  Could not create image directory: ${error.message}`);
+    return [];
+  }
+  
+  console.log(`📸 Processing ${imageUrls.length} images for ${productName}`);
+  
+  for (const [index, imageUrl] of imageUrls.entries()) {
+    try {
+      // Validate image URL
+      if (!isValidProductImage(imageUrl, productName)) {
+        console.log(`⏭️  Skipping non-product image: ${imageUrl}`);
+        continue;
+      }
+      
+      console.log(`📥 Downloading image ${index + 1}: ${imageUrl}`);
+      
+      // Download image
+      const downloadResult = await downloadImage(imageUrl, '', productId);
+      
+      if (downloadResult.success) {
+        processedImages.push({
+          url: downloadResult.publicUrl,
+          localPath: downloadResult.localPath,
+          altText: `${productName} - Product Image ${processedImages.length + 1}`,
+          originalUrl: downloadResult.originalUrl,
+          size: downloadResult.size,
+          contentType: downloadResult.contentType,
+          isLocal: true,
+          downloadTime: downloadResult.downloadTime
+        });
+        
+        console.log(`✅ Downloaded: ${downloadResult.filename} (${Math.round(downloadResult.size / 1024)}KB)`);
+      }
+      
+      // Delay between downloads
+      if (index < imageUrls.length - 1) {
+        await delay(1000); // 1 second between image downloads
+      }
+      
+    } catch (error) {
+      console.warn(`⚠️  Failed to download image ${imageUrl}: ${error.message}`);
+      
+      // Add original URL as fallback
+      if (isValidProductImage(imageUrl, productName)) {
+        processedImages.push({
+          url: imageUrl,
+          altText: `${productName} - Image ${processedImages.length + 1}`,
+          originalUrl: imageUrl,
+          isLocal: false,
+          error: error.message
+        });
+      }
+    }
+  }
+  
+  console.log(`📸 Processed ${processedImages.length} images for ${productName}`);
+  return processedImages;
 }
