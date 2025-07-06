@@ -6,6 +6,7 @@
   "scripts": {
     "scrape": "node scrape-heatshop.js",
     "scrape-enhanced": "node enhanced-scraper.js",
+    "import-crystallize": "node crystallize-import-script.js",
     "test": "node test-scraper.js",
     "test-images": "node test-image-upload.js",
     "test-graphql": "node test-supabase-graphql.js",
